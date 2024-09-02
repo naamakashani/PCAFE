@@ -15,7 +15,11 @@ from ucimlrepo import fetch_ucirepo
 import scipy.io
 import torch
 from torchvision import datasets, transforms
-
+import os
+import numpy as np
+import pandas as pd
+from PIL import Image
+from pathlib import Path
 
 def add_noise(X, noise_std=0.01):
     """
@@ -328,24 +332,91 @@ def import_breast():
     return X, y, breast_cancer_wisconsin_prognostic.metadata.num_features, breast_cancer_wisconsin_prognostic.metadata.num_features
 
 
-def load_image_data(): # Load the MNIST dataset
+def load_existing_image_data():
+    from pathlib import Path
+    import numpy as np
+    import pandas as pd
+
+    # Directory where the images were saved
+    image_dir = Path("mnist_images")
+
+    # Check if the directory exists
+    if not image_dir.exists():
+        raise FileNotFoundError(f"Directory {image_dir} does not exist. Please run the image saving code first.")
+
+    # Load image paths
+    image_paths = sorted(image_dir.glob("*.png"))
+    image_paths = [str(path) for path in image_paths]
+
+    # Generate the same random numeric feature
+    #np.random.seed(42)  # Set seed for reproducibility
+    #numeric_feature = np.random.rand(len(image_paths))
+    labels = [int(path.split('_')[2]) % 10 for path in image_paths]
 
 
-    # Define the transform to normalize the data
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
 
-    # Download and load the training data
-    trainset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
-    trainloader = torch.utils.data.DataLoader(trainset, batch_size=64, shuffle=True)
+    # Create a DataFrame
+    df = pd.DataFrame({
+        'image_path': image_paths,
+        #'numeric_feature': numeric_feature,
+        'label': labels
+    })
 
-    # Download and load the test data
-    testset = datasets.MNIST(root='./data', train=False, download=True, transform=transform)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=64, shuffle=False)
-    #combine the train and test data
-    X = np.concatenate([trainset.data.numpy(), testset.data.numpy()], axis=0)
-    X = X.reshape(X.shape[0], -1)
-    y = np.concatenate([trainset.targets.numpy(), testset.targets.numpy()], axis=0)
-    return -1, X, y,0, -1, "image"
+    # Create numpy arrays for image paths and numeric features
+    #X = df[['image_path', 'numeric_feature']].values
+    X = df[['image_path']].values
+    y = df['label'].values
+    num_features = X.shape[1]
+
+    return X, y, num_features
+
+
+
+def load_image_data():
+    from sklearn.datasets import fetch_openml
+    from pathlib import Path
+    from PIL import Image
+    import numpy as np
+    import pandas as pd
+
+    # Fetch the MNIST dataset from openml
+    mnist = fetch_openml('mnist_784', version=1)
+
+    images = mnist.data.values.reshape(-1, 28, 28).astype(np.uint8)
+    labels = mnist.target.astype(int)
+
+    # Create a directory to store the images
+    image_dir = Path("mnist_images")
+    image_dir.mkdir(exist_ok=True)
+
+    # Save images and store their paths in a list
+    image_paths = []
+
+    for i, (image, label) in enumerate(zip(images, labels)):
+        # Include the label in the image path
+        image_path = image_dir / f"label_{label}_image_{i}.png"
+        Image.fromarray(image).save(image_path)
+        image_paths.append(str(image_path))
+
+    # Generate a random numeric feature
+    numeric_feature = np.random.rand(len(image_paths))
+
+    # Create a DataFrame
+    df = pd.DataFrame({
+        'image_path': image_paths,
+        'numeric_feature': numeric_feature,
+        'label': labels
+    })
+
+    # Create numpy arrays for image paths and numeric features
+    X = df[['image_path', 'numeric_feature']].values
+    y = df['label'].values
+    num_features = X.shape[1]
+
+    return X, y, num_features
+
+
+
 
 def create_data():
     # Number of points to generate

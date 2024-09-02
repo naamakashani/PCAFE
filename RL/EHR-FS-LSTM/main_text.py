@@ -28,7 +28,7 @@ parser.add_argument("--n_update_target_dqn",
                     help="Number of episodes between updates of target dqn")
 parser.add_argument("--val_trials_wo_im",
                     type=int,
-                    default=80,
+                    default=20,
                     help="Number of validation trials without improvement")
 parser.add_argument("--ep_per_trainee",
                     type=int,
@@ -276,7 +276,7 @@ def load_networks(i_episode: int, env, input_dim=26, output_dim=14,
     question_embedding_load_path = os.path.join(FLAGS.save_dir, question_embedding_filename)
 
     # load guesser
-    guesser = Guesser(env.guesser.features_size)
+    guesser = Guesser(env.embedding_dim + env.text_embedding_dim, env.num_classes)
     guesser_state_dict = torch.load(guesser_load_path)
     guesser.load_state_dict(guesser_state_dict)
     guesser.to(device=device)
@@ -511,6 +511,7 @@ def val(i_episode: int,
     confmat = confusion_matrix(env.y_val, y_hat_val)
     print('confusion matrix: ')
     print(confmat)
+
     acc = np.sum(np.diag(confmat)) / len(env.y_val)
     print('Validation accuracy: {:1.3f}'.format(acc))
 

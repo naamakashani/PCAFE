@@ -1,3 +1,5 @@
+import numpy as np
+
 from state_text import *
 import torch.nn.functional as F
 import torch.nn as nn
@@ -11,6 +13,44 @@ import torchvision.models as models
 from torchvision import transforms
 from PIL import Image
 
+import torch
+import torch.nn as nn
+import torchvision.models as models
+import torchvision.transforms as transforms
+from PIL import Image
+
+
+class ImageEmbedder(nn.Module):
+    def __init__(self):
+        super(ImageEmbedder, self).__init__()
+        self.resnet = models.resnet50(pretrained=True)
+        self.resnet.fc = torch.nn.Identity()  # Remove the classification layer to get embeddings
+
+        # Add a fully connected layer to map the 2048-dim output to 768-dim
+        self.fc = nn.Linear(2048, 768)
+
+        # Image preprocessing
+        self.transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+    def embed_image(self, image_path):
+        image = Image.open(image_path).convert('RGB')
+        img_tensor = self.transform(image).unsqueeze(0)  # Add batch dimension
+
+        # Generate embedding
+        with torch.no_grad():
+            embedding = self.resnet(img_tensor)
+            embedding = self.fc(embedding)  # Reduce to 768-dim
+
+        return embedding
+
+
+
+
 
 class myEnv(gymnasium.Env):
 
@@ -18,45 +58,34 @@ class myEnv(gymnasium.Env):
                  flags,
                  device):
         self.device = device
-        self.X, self.y, self.features_size= load_text_data()
+        self.X, self.y, self.features_size= load_existing_image_data()
+        self.num_classes= len(np.unique(self.y))
+
+
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(self.X, self.y,
                                                                                 test_size=0.3)
         self.X_train, self.X_val, self.y_train, self.y_val = train_test_split(self.X_train,
                                                                               self.y_train,
                                                                               test_size=0.05)
-        # self.numeric_X, self.text_features, self.y, self.features_size, self.text_index, self.numeric_index,self.columns_name = load_text_data()
-        # self.numeric_X, self.image_features, self.y, self.features_size, self.image_index, self.numeric_index, self.columns_name = load_image_data()
         self.text_model = AutoModel.from_pretrained('bert-base-uncased')
         self.tokenizer = AutoTokenizer.from_pretrained('bert-base-uncased')
-        # Load pre-trained ResNet model
-        self.resnet = models.resnet50(pretrained=True)
-        self.resnet.fc = torch.nn.Identity()  # Remove the classification layer to get embeddings
-        # Load an example image and preprocess it
-        self.transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        self.embedder = ImageEmbedder()
         self.text_embedding_dim = self.text_model.config.hidden_size
         self.embedding_dim = 64
-        self.guesser = Guesser(self.embedding_dim + self.text_embedding_dim)
+
+
+
+        self.guesser = Guesser(self.embedding_dim + self.text_embedding_dim, self.num_classes)
         self.question_embedding = nn.Embedding(num_embeddings=self.features_size, embedding_dim=self.embedding_dim)
 
         self.state = State(self.features_size, self.embedding_dim + self.text_embedding_dim, self.device)
-
-        # self.X_train, self.X_test, self.y_train, self.y_test, self.text_train, self.text_test = train_test_split(
-        #     self.numeric_X, self.y, self.text_features, test_size=0.2, random_state=42)
-        # self.X_train, self.X_val, self.y_train, self.y_val, self.text_train, self.text_val = train_test_split(
-        #     self.X_train, self.y_train, self.text_train, test_size=0.2, random_state=24)
-
         cost_list = np.array(np.ones(self.features_size + 1))
         self.action_probs = torch.from_numpy(np.array(cost_list))
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer_guesser = optim.Adam(self.guesser.parameters(), lr=flags.lr)
         self.optimizer_state = optim.Adam(self.state.parameters(), lr=flags.lr)
         self.optimizer_embedding = optim.Adam(self.question_embedding.parameters(), lr=flags.lr)
-        self.episode_length = 7
+        self.episode_length = 1
         self.count = 0
 
     def reset(self,
@@ -150,11 +179,8 @@ class myEnv(gymnasium.Env):
         return embeddings
 
 
-    def embed_image(self, image):
-        img_tensor = self.transform(image).unsqueeze(0)  # Add batch dimension
-        # Generate embedding
-        with torch.no_grad():
-            embedding = self.resnet(img_tensor)
+    def embed_image(self, image_path):
+        embedding = self.embedder.embed_image(image_path)
         return embedding
 
     def is_numeric_value(self,value):
@@ -170,11 +196,12 @@ class myEnv(gymnasium.Env):
         else:
             return False
     def is_image_value(self,value):
-        # Check if the value is an image
-        if isinstance(value, Image.Image):
-            return True
-        else:
-            return False
+       #check if value is path that ends with 'png' or 'jpg'
+        if isinstance(value, str):
+            if value.endswith('png') or value.endswith('jpg'):
+                return True
+            else:
+                return False
 
     def update_state(self, action, mode, mask, eps):
         prev_state = self.s
@@ -188,10 +215,11 @@ class myEnv(gymnasium.Env):
             #ceck type of feature
             if self.is_numeric_value(answer):
                 answer_vec = torch.unsqueeze(torch.ones(self.text_embedding_dim) * answer, 0)
-            elif self.is_text_value(answer):
-                answer_vec = self.embed_text([answer])
             elif self.is_image_value(answer):
                 answer_vec = self.embed_image(answer)
+            elif self.is_text_value(answer):
+                answer_vec = self.embed_text([answer])
+
             ind = torch.LongTensor([action]).to(device=self.device)
             question_embedding = self.question_embedding(ind)
             question_embedding = question_embedding.to(device=self.device)
@@ -201,7 +229,7 @@ class myEnv(gymnasium.Env):
             probs = self.guesser(next_state)
             y_true = self.y_train[self.patient]
             y_tensor = torch.tensor([int(y_true)])
-            y_true_tensor = F.one_hot(y_tensor, num_classes=2)
+            y_true_tensor = F.one_hot(y_tensor, num_classes=self.num_classes)
             self.probs = probs.float()
             self.probs = F.softmax(self.probs, dim=1)
             y_true_tensor = y_true_tensor.float()
@@ -308,7 +336,7 @@ class myEnv(gymnasium.Env):
                 self.guesser.optimizer.zero_grad()
                 self.guesser.train(mode=True)
                 y_tensor = torch.tensor([int(y_true)])
-                y_true_tensor = F.one_hot(y_tensor, num_classes=2).squeeze()
+                y_true_tensor = F.one_hot(y_tensor, num_classes=self.num_classes).squeeze()
                 self.probs = self.probs.float()
                 y_true_tensor = y_true_tensor.float()
                 self.guesser.loss = self.guesser.criterion(self.probs, y_true_tensor)

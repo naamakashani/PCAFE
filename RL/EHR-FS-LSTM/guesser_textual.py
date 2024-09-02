@@ -29,9 +29,9 @@ class Guesser(nn.Module):
     implements a net that guesses the outcome given the state
     """
 
-    def __init__(self, features_size,
-                 hidden_dim1=FLAGS.hidden_dim1, hidden_dim2=FLAGS.hidden_dim2,
-                 num_classes=2):
+    def __init__(self, features_size,num_classes=2,
+                 hidden_dim1=FLAGS.hidden_dim1, hidden_dim2=FLAGS.hidden_dim2
+                 ):
 
         super(Guesser, self).__init__()
         self.features_size = features_size
