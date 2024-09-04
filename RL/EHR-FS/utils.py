@@ -455,7 +455,7 @@ def load_gisetta():
 def load_diabetes():
     data = []
     labels = []
-    file_path_clean = '/RL/extra/diabetes/diabetes_clean.csv'
+    file_path_clean = r'C:\Users\kashann\PycharmProjects\PCAFE\RL\DATA\diabetes_clean.csv'
     # Open the CSV file
     with open(file_path_clean, newline='') as csvfile:
         # Create a CSV reader

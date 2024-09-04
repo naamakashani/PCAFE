@@ -212,7 +212,7 @@ class myEnv(gymnasium.Env):
                 answer = self.X_val[self.patient, action]
             elif mode == 'test':
                 answer = self.X_test[self.patient, action]
-            #ceck type of feature
+            #check type of feature
             if self.is_numeric_value(answer):
                 answer_vec = torch.unsqueeze(torch.ones(self.text_embedding_dim) * answer, 0)
             elif self.is_image_value(answer):

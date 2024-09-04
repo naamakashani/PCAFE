@@ -8,7 +8,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import RL.utils as utils
+import utils
 from sklearn.metrics import confusion_matrix
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -22,7 +22,7 @@ parser.add_argument("--batch_size",
                     help="Mini-batch size")
 parser.add_argument("--num_epochs",
                     type=int,
-                    default=1000,
+                    default=100,
                     help="number of epochs")
 parser.add_argument("--hidden-dim1",
                     type=int,

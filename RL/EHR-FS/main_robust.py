@@ -19,7 +19,7 @@ parser.add_argument("--save_guesser_dir",
                     help="Directory for saved guesser model")
 parser.add_argument("--directory",
                     type=str,
-                    default="RL/EHR-FS",
+                    default=r'C:\Users\kashann\PycharmProjects\PCAFE\RL\EHR-FS',
                     help="Directory for saved models")
 parser.add_argument("--gamma",
                     type=float,
