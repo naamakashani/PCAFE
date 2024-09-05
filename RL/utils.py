@@ -13,7 +13,13 @@ import torch
 from sklearn.utils import resample
 from ucimlrepo import fetch_ucirepo
 import scipy.io
-
+import torch
+from torchvision import datasets, transforms
+import os
+import numpy as np
+import pandas as pd
+from PIL import Image
+from pathlib import Path
 
 def add_noise(X, noise_std=0.01):
     """
@@ -269,7 +275,11 @@ def load_text_data():
     ]
     # open diabetes_prediction_text
     diabetes_prediction_text = pd.read_csv(
-        r'/DATA/diabetes_prediction_text.csv')
+        r'C:\Users\kashann\PycharmProjects\FS-EHR\RL\DATA\diabetes_prediction_text.csv')
+    #convert all columns exept for the text column to numeric
+    # Assuming df is your DataFrame
+    diabetes_prediction_text.iloc[:, :-2] = diabetes_prediction_text.iloc[:, :-2].astype(float)
+
 
     # take 100 samples from diabetes_prediction_text
     diabetes_prediction_text = diabetes_prediction_text.sample(n=2000, random_state=1)
@@ -281,23 +291,9 @@ def load_text_data():
 
     labels = diabetes_prediction_text.iloc[:, -1].values.astype(int)  # Labels as numpy array of integers
     diabetes_prediction_text = diabetes_prediction_text.drop(columns=['diabetes'])  # Drop the label column
-    # Identify numeric and text columns
-    numeric_columns = diabetes_prediction_text.select_dtypes(include=np.number).columns
-    text_columns = diabetes_prediction_text.columns.difference(numeric_columns)
 
-    numeric_features = diabetes_prediction_text.loc[:, numeric_columns].values
-    text_features = diabetes_prediction_text.loc[:, text_columns].astype(str).values
+    return diabetes_prediction_text, labels, len(diabetes_prediction_text.columns)
 
-    # Assuming the last column is the label
-    y = labels
-    # Get numeric and text column indices
-    numeric_column_indices = [diabetes_prediction_text.columns.get_loc(col) for col in numeric_columns]
-    text_column_indices = [diabetes_prediction_text.columns.get_loc(col) for col in text_columns]
-    #name of the columns
-    column_names = diabetes_prediction_text.columns
-
-    return numeric_features, text_features, y, numeric_features.shape[1] + text_features.shape[
-        1], text_column_indices, numeric_column_indices, column_names
 
 
 
@@ -321,6 +317,92 @@ def import_breast():
     y = np.array(y)
 
     return X, y, breast_cancer_wisconsin_prognostic.metadata.num_features, breast_cancer_wisconsin_prognostic.metadata.num_features
+
+
+def load_existing_image_data():
+    from pathlib import Path
+    import numpy as np
+    import pandas as pd
+
+    # Directory where the images were saved
+    image_dir = Path("mnist_images")
+
+    # Check if the directory exists
+    if not image_dir.exists():
+        raise FileNotFoundError(f"Directory {image_dir} does not exist. Please run the image saving code first.")
+
+    # Load image paths
+    image_paths = sorted(image_dir.glob("*.png"))
+    image_paths = [str(path) for path in image_paths]
+
+    # Generate the same random numeric feature
+    #np.random.seed(42)  # Set seed for reproducibility
+    #numeric_feature = np.random.rand(len(image_paths))
+    labels = [int(path.split('_')[2]) % 10 for path in image_paths]
+
+
+
+    # Create a DataFrame
+    df = pd.DataFrame({
+        'image_path': image_paths,
+        #'numeric_feature': numeric_feature,
+        'label': labels
+    })
+
+    # Create numpy arrays for image paths and numeric features
+    #X = df[['image_path', 'numeric_feature']].values
+    X = df[['image_path']].values
+    y = df['label'].values
+    num_features = X.shape[1]
+
+    return X, y, num_features
+
+
+
+def load_image_data():
+    from sklearn.datasets import fetch_openml
+    from pathlib import Path
+    from PIL import Image
+    import numpy as np
+    import pandas as pd
+
+    # Fetch the MNIST dataset from openml
+    mnist = fetch_openml('mnist_784', version=1)
+
+    images = mnist.data.values.reshape(-1, 28, 28).astype(np.uint8)
+    labels = mnist.target.astype(int)
+
+    # Create a directory to store the images
+    image_dir = Path("mnist_images")
+    image_dir.mkdir(exist_ok=True)
+
+    # Save images and store their paths in a list
+    image_paths = []
+
+    for i, (image, label) in enumerate(zip(images, labels)):
+        # Include the label in the image path
+        image_path = image_dir / f"label_{label}_image_{i}.png"
+        Image.fromarray(image).save(image_path)
+        image_paths.append(str(image_path))
+
+    # Generate a random numeric feature
+    numeric_feature = np.random.rand(len(image_paths))
+
+    # Create a DataFrame
+    df = pd.DataFrame({
+        'image_path': image_paths,
+        'numeric_feature': numeric_feature,
+        'label': labels
+    })
+
+    # Create numpy arrays for image paths and numeric features
+    X = df[['image_path', 'numeric_feature']].values
+    y = df['label'].values
+    num_features = X.shape[1]
+
+    return X, y, num_features
+
+
 
 
 def create_data():
@@ -455,7 +537,7 @@ def load_gisetta():
 def load_diabetes():
     data = []
     labels = []
-    file_path_clean = r'C:\Users\kashann\PycharmProjects\PCAFE\RL\DATA\diabetes_clean.csv'
+    file_path_clean = '/RL/extra/diabetes/diabetes_clean.csv'
     # Open the CSV file
     with open(file_path_clean, newline='') as csvfile:
         # Create a CSV reader
